@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
 
 import datetime as dt
 
@@ -24,20 +23,34 @@ class AchievementSerializer(serializers.ModelSerializer):
 
 
 class CatSerializer(serializers.ModelSerializer):
-    achievements = AchievementSerializer(many=True, required=False)
+    achievements = AchievementSerializer(read_only=True, many=True)
     color = serializers.ChoiceField(choices=CHOICES)
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
     age = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Cat
         fields = ('id', 'name', 'color', 'birth_year', 'achievements', 'owner',
                   'age')
+        read_only_fields = ('owner',)
+
+    def validate_birth_year(self, value):
+        year = dt.date.today().year
+        if not (year - 40 < value <= year):
+            raise serializers.ValidationError('Проверьте год рождения!')
+        return value
+
+    def validate(self, data):
+        if data['color'] == data['name']:
+            raise serializers.ValidationError(
+                'Имя не может совпадать с цветом!')
+        return data
 
     def get_age(self, obj):
         return dt.datetime.now().year - obj.birth_year
 
     def create(self, validated_data):
-        if 'achievements' not in self.initial_data:
+        if 'achievements' not in self.initial_data:  # type: ignore
             cat = Cat.objects.create(**validated_data)
             return cat
         else:
